@@ -18,6 +18,7 @@ import numpy as np
 import os.path as path
 from pylab import Circle
 import os
+from utils.stats import pearsonr
 
 ## Colors 
 colors = dict(
@@ -58,14 +59,14 @@ ppt_figsize = (9,5)
 
 font_sizes = {
     'paper': {
-        'pannel_letter': 12,
+        'panel_letter': 12,
         'title': 12,
         'tick_label': 10,
         'axis_label': 10, 
         'legend': 8,
     },
     'ppt': {
-        'pannel_letter': 12,
+        'panel_letter': 12,
         'title': 12,
         'tick_label': 20,
         'axis_label': 20, 
@@ -100,7 +101,7 @@ def add_cax(ax, fig, left_offset=0.03):
     """ Add colorbar axis to the right of an axis 
     """
     bbox = ax.get_position()
-    cax = fig.add_axes([bbox.x1+left_offset, bbox.y0, 0.01, bbox.y1-bbox.y0])
+    cax = fig.add_axes([bbox.x1+left_offset, bbox.y0, 0.03, bbox.y1-bbox.y0])
     return cax
 
 def label(ax, pt, text):
@@ -110,7 +111,7 @@ def label(ax, pt, text):
 def subplots(n_vert_plots, n_horiz_plots, x=0.03, y=0.05, left_offset=0.06, 
     aspect=None, bottom_offset=0.075, return_flat=False, show_ur_lines=False,
     hold=False, ylabels=False, sep_ylabels=False, xlabels=False, 
-    sep_xlabels=False):
+    sep_xlabels=False, letter_offset=None):
     """
     An implementation of the subplots function
 
@@ -146,13 +147,13 @@ def subplots(n_vert_plots, n_horiz_plots, x=0.03, y=0.05, left_offset=0.06,
 
             axes_row.append(new_ax)
         axes.append(axes_row)
+
+    axes = np.array(axes)
+    if not letter_offset == None:
+        axis_letters = [letter_axis(ax, chr(k+65), **letter_offset) for k, ax in enumerate(axes.ravel())]
+
     if return_flat:
-        axes_flat = []
-        for ax in axes:
-            axes_flat += ax
-        axes = axes_flat
-    else:
-        axes = np.array(axes)
+        axes = axes.ravel()
 
     return axes
 
@@ -390,30 +391,62 @@ def write_corner_text(ax, corner, text, size=8):
     """ Write text in one of the corners 'bottom_left', 'bottom_right',
     'top_left', 'top_right'
     """
-    min_x, max_x = ax.get_xlim()
-    min_y, max_y = ax.get_ylim()
+    #min_x, max_x = ax.get_xlim()
+    #min_y, max_y = ax.get_ylim()
 
-    x_left = min_x + 0.03*(max_x-min_x)
-    x_right = max_x
-    y_down = min_y + 0.03*(max_y-min_y)
-    y_up = max_y
+    x_left = 0.03
+    x_right = 1.
+    y_down = 0.03
+    y_up = 1.
+    #x_left = min_x + 0.03*(max_x-min_x)
+    #x_right = max_x
+    #y_down = min_y + 0.03*(max_y-min_y)
+    #y_up = max_y
 
     if corner == 'bottom_left':
         ax.text(x_left, y_down, text, 
             horizontalalignment='left', verticalalignment='bottom',
-            size=size)
+            size=size, transform=ax.transAxes)
     elif corner == 'bottom_right':
         ax.text(x_right, y_down, text, 
             horizontalalignment='right', verticalalignment='bottom',
-            size=size)
+            size=size, transform=ax.transAxes)
     elif corner == 'top_left':
         ax.text(x_left, y_up, text, 
             horizontalalignment='left', verticalalignment='top',
-            size=size)
+            size=size, transform=ax.transAxes)
     elif corner == 'top_right':
         ax.text(x_right, y_up, text, 
             horizontalalignment='right', verticalalignment='top',
-            size=size)
+            size=size, transform=ax.transAxes)
+
+def scatterplot_line(ax, xdata, ydata, xlim, weights, p_corner='top_right'):
+    """ 
+    Plot linear best-fit for weighted scatterplot data
+    """
+    inds = ~np.isnan(xdata) * ~np.isnan(ydata)
+    coefs = np.polynomial.polynomial.polyfit(xdata[inds], ydata[inds], 
+        1, w=weights[inds]/sum(weights[inds]))
+    x = np.linspace(xlim[0], xlim[1], 20)
+    fit = np.polynomial.polynomial.polyval(x, coefs)
+    ax.plot(x, fit, 'k--')
+    r, p = pearsonr(xdata, ydata, weights)
+    if p < 0.001:
+        p_str = r'$r=%0.3g$***' % r 
+    elif p < 0.05:
+        p_str = r'$r=%0.3g$*' % r
+    else:
+        p_str = r'$r=%0.3g$' % r 
+    write_corner_text(ax, p_corner, p_str, size=8)
+
+def add_cax2(ax, fig, im, cbar_label, lim, fontsize=10):
+    cax = add_cax(ax, fig, left_offset=0.03)
+    cbar = fig.colorbar(im, cax=cax, ticks=lim)
+    ticks = cax.get_ymajorticklabels()
+    [tick.set_fontsize(fontsize) for tick in ticks]
+    ticks[0].set_va('bottom')
+    ticks[1].set_va('top')
+    axis_label(cax, cbar_label, offset=2, axis='y', size=fontsize)
 
 def letter_axis(ax, letter, axis_align=0, offset=0):
     print letter
@@ -431,7 +464,6 @@ def letter_axes(axes, **kwargs):
         [letter_axis(ax, chr(k+65), **kwargs) for k, ax in enumerate(axes)]
     elif isinstance(axes, np.ndarray):
         [letter_axis(ax, chr(k+65), **kwargs) for k, ax in enumerate(axes.ravel())]
-
 
 def set_xlim(ax, lim, labels=[], show_lim=True, size=tick_label_size, axis='x'):
     """ Set x-lim 
@@ -551,14 +583,6 @@ def set_ylim(ax, lim, labels=[], show_lim=True, size=tick_label_size):
     except:
         pass
 
-##def set_xlim(*args, **kwargs):
-##    axis = kwargs.pop('axis', 'x')
-##    set_axlim(*args, axis='x', **kwargs)
-##
-##def set_ylim(*args, **kwargs):
-##    axis = kwargs.pop('axis', 'y')
-##    set_axlim(*args, axis='y', **kwargs)
-
 def set_lim(ax, xlim, ylim):
     set_xlim(ax, xlim, show_lim=True)
     set_ylim(ax, ylim, show_lim=True)
@@ -600,7 +624,10 @@ def set_xlabel(ax, x_label):
     ax.set_xlabel(x_label, size=axis_label_size) 
 
 def set_title(ax, title):
-    ax.set_title(title, size=title_size)
+    if np.iterable(ax):
+        map(lambda axis, axis_title: set_title(axis, axis_title), ax, title)
+    else:
+        ax.set_title(title, size=title_size)
 
 def clear_ticks(ax):
     """ Helper function to clear axis ticks 
@@ -636,11 +663,11 @@ def subplot_binary_vec(vec, ycoord=0, ax=None, xvec=None, *args, **kwargs):
 def legend(ax, loc='best'):
     ax.legend(prop={'size':legend_size}, loc=loc)
 
-def save(plot_dir, basename, **kwargs):
+def save(plot_dir, basename, verbose=False, **kwargs):
     fname = os.path.join(plot_dir, basename)
+    if verbose: print fname
     plt.savefig(fname, **kwargs)
 
-##### Incomplete
 def unify_x_axes(axes):
     raise Exception("unify_x_axes incomplete")
 
@@ -652,7 +679,6 @@ def twinx(ax):
     ax.twinx()
     # TODO move labeling over to the other vertical line (i.e. left ->right)
 
-##### Deprecated
 def elim_ur_lines(ax):
     """ Eliminate the upper right lines from the axis
     """
@@ -706,9 +732,44 @@ def axis_label(ax, label, offset=-0.1, axis_align=0.5, size=10,
             size=size, va='center', rotation=0, transform=ax.transAxes)
 
 def xlabel(ax, label, **kwargs):
-    kwargs.pop('axis', 'x')
-    axis_label(ax, label, axis='x', **kwargs)
+    if np.iterable(ax):
+        map(lambda x: xlabel(x, label, **kwargs), ax)
+    else:
+        kwargs.pop('axis', 'x')
+        return axis_label(ax, label, axis='x', **kwargs)
 
 def ylabel(ax, label, **kwargs):
-    kwargs.pop('axis', 'y')
-    return axis_label(ax, label, axis='y', **kwargs)
+    if np.iterable(ax):
+        map(lambda x: ylabel(x, label, **kwargs), ax)
+    else:
+        kwargs.pop('axis', 'y')
+        return axis_label(ax, label, axis='y', **kwargs)
+
+def ylabel_widths(axes):
+    n_cols = axes.shape[1]
+    n_rows = axes.shape[0]
+    max_tick_widths = np.zeros([n_rows, n_cols])
+    for k in range(n_cols):
+        for m in range(n_rows):
+            ax = axes[m,k]
+            ticks = ax.yaxis.get_major_ticks()
+            tick_widths = np.zeros(len(ticks))
+            for j, tick in enumerate(ticks):
+                # TODO exclude invisible ticks
+                label = tick.label
+                label_extent = label.get_window_extent()
+                fig_extent = fig.get_window_extent()
+                
+                label_display_width = label_extent.x1 - label_extent.x0
+                label_display_height = label_extent.y1 - label_extent.y0
+                
+                fig_display_width = fig_extent.x1 - fig_extent.x0
+                fig_display_height = fig_extent.y1 - fig_extent.y0
+                tick_widths[j] = label_display_width / fig_display_width
+            max_tick_widths[m,k] = max(tick_widths)
+    return max_tick_widths            
+
+def histogram_line(ax, data, bins, normed=True, **plot_kwargs):
+    hist_data, _ = np.histogram(data, bins, normed=normed)
+    bins = bins[:-1] + bins[1]/2
+    ax.plot(bins, hist_data, **plot_kwargs)
