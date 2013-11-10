@@ -18,7 +18,6 @@ import numpy as np
 import os.path as path
 from pylab import Circle
 import os
-from utils.stats import pearsonr
 
 ## Colors 
 colors = dict(
