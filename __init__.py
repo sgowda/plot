@@ -465,7 +465,7 @@ def letter_axes(axes, **kwargs):
     elif isinstance(axes, np.ndarray):
         [letter_axis(ax, chr(k+65), **kwargs) for k, ax in enumerate(axes.ravel())]
 
-def set_xlim(ax, lim, labels=[], show_lim=True, size=tick_label_size, axis='x'):
+def set_xlim(ax, lim=None, labels=[], show_lim=True, size=tick_label_size, axis='x'):
     """ Set x-lim 
     """
     if np.iterable(ax) and np.iterable(show_lim):
@@ -488,6 +488,7 @@ def set_xlim(ax, lim, labels=[], show_lim=True, size=tick_label_size, axis='x'):
             get_ticks = ax.xaxis.get_major_ticks
             tick_alignment = ['left', 'right']
             align_dim = 'set_ha'
+            if lim == None: lim = ax.get_xlim()
         elif axis == 'y':
             ticklabel_fn = ax.set_yticklabels
             lim_fn = ax.set_ylim
@@ -495,6 +496,7 @@ def set_xlim(ax, lim, labels=[], show_lim=True, size=tick_label_size, axis='x'):
             get_ticks = ax.yaxis.get_major_ticks
             tick_alignment = ['bottom', 'top']
             align_dim = 'set_va'
+            if lim == None: lim = ax.get_ylim()
 
 
         lim_fn(lim)
@@ -563,7 +565,7 @@ def set_axlim(ax, lim, labels=[], show_lim=True, size=tick_label_size, axis='x')
         except:
             pass
 
-def set_ylim(ax, lim, labels=[], show_lim=True, size=tick_label_size):
+def set_ylim(ax, lim=None, labels=[], show_lim=True, size=tick_label_size):
     """ 
     Set y-lim 
     """
@@ -732,6 +734,7 @@ def axis_label(ax, label, offset=-0.1, axis_align=0.5, size=10,
             size=size, va='center', rotation=0, transform=ax.transAxes)
 
 def xlabel(ax, label, **kwargs):
+    kwargs['offset'] = kwargs.pop('offset', -0.05)
     if np.iterable(ax):
         map(lambda x: xlabel(x, label, **kwargs), ax)
     else:
@@ -739,6 +742,7 @@ def xlabel(ax, label, **kwargs):
         return axis_label(ax, label, axis='x', **kwargs)
 
 def ylabel(ax, label, **kwargs):
+    kwargs['offset'] = kwargs.pop('offset', -0.03)
     if np.iterable(ax):
         map(lambda x: ylabel(x, label, **kwargs), ax)
     else:
@@ -773,3 +777,4 @@ def histogram_line(ax, data, bins, normed=True, **plot_kwargs):
     hist_data, _ = np.histogram(data, bins, normed=normed)
     bins = bins[:-1] + bins[1]/2
     ax.plot(bins, hist_data, **plot_kwargs)
+    return hist_data
