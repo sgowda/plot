@@ -11,13 +11,19 @@ TODO
 """
 from __future__ import division
 import matplotlib.pyplot as plt
-import numpy as np
+import matplotlib.font_manager as fm
 import matplotlib.patches as patches
 from itertools import izip
 import numpy as np
 import os.path as path
 from pylab import Circle
 import os
+
+default_font = fm.FontProperties(fname='/Users/sgowda/code/plotutil/Helvetica.ttf')
+bold_font = fm.FontProperties(fname='/Users/sgowda/code/plotutil/HelveticaBold.ttf')
+
+ieee_fig_font = fm.FontProperties(fname='/Users/sgowda/code/plotutil/Helvetica.ttf', size=8)
+legend_font = fm.FontProperties(fname='/Users/sgowda/code/plotutil/Helvetica.ttf', size=6)
 
 ## Colors 
 colors = dict(
@@ -42,6 +48,10 @@ DarkViolet    = np.array([148., 0., 211.])/255,
 Aquamarine    = np.array([127., 255., 212.])/255,
 PeachPuff     = np.array([255., 218., 185])/255
 )
+
+## Declare the "regular" font
+from matplotlib.font_manager import FontProperties
+reg_font = FontProperties()
 
 color_names = colors.keys()
 n_colors = len(color_names)
@@ -96,21 +106,15 @@ def sem_line(ax, val, sem, orientation='horiz', **kwargs):
     else:
         raise Exception("unknown orientation: %s" % orientation)
 
-def add_cax(ax, fig, left_offset=0.03):
-    """ Add colorbar axis to the right of an axis 
-    """
-    bbox = ax.get_position()
-    cax = fig.add_axes([bbox.x1+left_offset, bbox.y0, 0.03, bbox.y1-bbox.y0])
-    return cax
 
 def label(ax, pt, text):
     raise Exception("FINISH")
 
 ## Tools for manipulating matplotlib figures 
-def subplots(n_vert_plots, n_horiz_plots, x=0.03, y=0.05, left_offset=0.06, 
-    aspect=None, bottom_offset=0.075, return_flat=False, show_ur_lines=False,
+def subplots(n_vert_plots, n_horiz_plots, x=0.03, y=0.05, left_offset=0.06, right_offset=0.,
+    aspect=None, top_offset=0, bottom_offset=0.075, return_flat=False, show_ur_lines=False,
     hold=False, ylabels=False, sep_ylabels=False, xlabels=False, 
-    sep_xlabels=False, letter_offset=None):
+    sep_xlabels=False, letter_offset=None, fig=None):
     """
     An implementation of the subplots function
 
@@ -122,10 +126,15 @@ def subplots(n_vert_plots, n_horiz_plots, x=0.03, y=0.05, left_offset=0.06,
     """
     if bottom_offset == None:
         bottom_offset = left_offset
-    vert_frac_per_row = (1.-bottom_offset)/n_vert_plots
-    horiz_frac_per_col = (1.-left_offset)/n_horiz_plots
+    vert_frac_per_row = (1.-bottom_offset-top_offset)/n_vert_plots
+    horiz_frac_per_col = (1.-left_offset-right_offset)/n_horiz_plots
     subplot_width = horiz_frac_per_col - x 
     subplot_height = vert_frac_per_row - y
+
+    if fig is not None:
+        fn = fig.add_axes
+    else:
+        fn = plt.axes
 
     axes = []
     for m in range(n_vert_plots):
@@ -134,9 +143,9 @@ def subplots(n_vert_plots, n_horiz_plots, x=0.03, y=0.05, left_offset=0.06,
             xstart = left_offset + x/2 + horiz_frac_per_col*n 
             ystart = bottom_offset + y/2 + (n_vert_plots - 1 - m)*vert_frac_per_row
             if aspect is not None:
-                new_ax = plt.axes([xstart, ystart, subplot_width, subplot_height], aspect=aspect)
+                new_ax = fn([xstart, ystart, subplot_width, subplot_height], aspect=aspect)
             else:
-                new_ax = plt.axes([xstart, ystart, subplot_width, subplot_height])
+                new_ax = fn([xstart, ystart, subplot_width, subplot_height])
 
             if not show_ur_lines:
                 elim_ur_lines(new_ax)
@@ -210,7 +219,8 @@ def shade(ax, region=[None, None, None, None]):
 
 def error_line(ax, x_data, y_data, error_region, **kwargs):
     color = kwargs.pop('color', 'blue')
-    ax.plot(x_data, y_data, color=color)
+    label = kwargs.pop('label', None)
+    ax.plot(x_data, y_data, color=color, label=label, **kwargs)
     ax.fill_between(x_data, y_data - error_region, y_data + error_region, 
         color=color, alpha=kwargs.pop('alpha', 0.15))
 
@@ -246,12 +256,19 @@ def elim_lines(ax, lines=['top', 'right']):
             ax.spines['bottom'].set_visible(False)
 
 def set_ticklabel_size(ax, xsize=tick_label_size, ysize=None):
+    if np.iterable(ax):
+        map(lambda x: set_ticklabel_size(x, xsize=xsize, ysize=ysize), ax)
+        return 
+
+        
     if ysize == None:
         ysize = xsize
     for tick in ax.xaxis.get_major_ticks():
-        tick.label.set_fontsize(xsize)
+        tick.label.set_font_properties(ieee_fig_font)
+        # tick.label.set_fontsize(xsize)
     for tick in ax.yaxis.get_major_ticks():
-        tick.label.set_fontsize(ysize)
+        tick.label.set_font_properties(ieee_fig_font)
+        # tick.label.set_fontsize(ysize)
 
 def init_ax(ax=None, aspect=None):
     """ Helper function to handle optional 'ax' arguments for other 
@@ -317,11 +334,13 @@ def color_gradient(n_pts, start_color=(0,1,0), end_color=(1,0,0)):
     return colors
 
 def _plot_one_bar(ax, data, ctr, fn=np.mean, width=0.05, c='blue', s=60, m='o', 
-    label=None, show_data=True, data_to_show='pts'):
+    label=None, show_data=True, data_to_show='pts', edgecolor='none', facecolor='none'):
     """ Generate a single bar plot
     """ 
+    if edgecolor == 'none':
+        edgecolor = c
     n_data_pts = len(data)
-    ax.bar( ctr-width/2, fn(data), width=width, color='none', edgecolor=c, 
+    ax.bar(ctr-width/4, fn(data), width=width/2, color=facecolor, edgecolor=edgecolor, 
         linewidth=3)
     if show_data:
         if data_to_show == 'pts':
@@ -330,21 +349,20 @@ def _plot_one_bar(ax, data, ctr, fn=np.mean, width=0.05, c='blue', s=60, m='o',
         elif data_to_show == 'std':
             std = np.std(data)
             ax.plot([ctr, ctr], [fn(data)-std, fn(data)+std], 
-                color=c, marker=m, label=label, linewidth=2)
+                color=c, label=label, linewidth=2)
 
-def sig_line(ax, left, right, ypt, epsilon=.025):
+def sig_line(ax, left, right, ypt, text):
     """ Plot the square brace indicating that two bar plots are significantly
     different
     """
-    ax.plot([left, right], [ypt, ypt], color='k', linewidth=3)
-    ax.plot([left, left], [ypt-epsilon, ypt], color='k', linewidth=3)
-    ax.plot([right, right], [ypt-epsilon, ypt], color='k', linewidth=3)
-    ax.text( float(left+right)/2, ypt, '*')
+    props = dict(connectionstyle='bar', arrowstyle='-', shrinkA=20, shrinkB=20, lw=2)
+    ax.annotate(text, xy=(float(left+right)/2, ypt), zorder=10, ha='center')
+    ax.annotate('', xy=(left, ypt), xytext=(right, ypt), arrowprops=props)    
 
 def bar_plot(data, ax=None, sig_pairs=[], ypts=[], 
     colors=['green', 'red', 'magenta', 'blue'], markers=['o', 's', '^', '*'],
     bar_width=0.05, labels=None, show_data=True, data_to_show='pts', 
-    fn=np.mean, hide_bar=False, shade_bar=False, start_vals=[], x_offset=0):
+    fn=np.mean, hide_bar=False, shade_bar=False, start_vals=[], x_offset=0, **kwargs):
     """ Bar plot
     """
     # TODO implement hide_bar, shaded, start_vals
@@ -386,77 +404,98 @@ def bar_plot(data, ax=None, sig_pairs=[], ypts=[],
         sig_line(ax, ticks[x], ticks[y], ypts[k])
     #return [-bar_width*0.5, (n_data_bars - 0.5)*bar_width]
 
-def write_corner_text(ax, corner, text, size=8):
+def write_corner_text(ax, corner, text, size=8, **kwargs):
     """ Write text in one of the corners 'bottom_left', 'bottom_right',
     'top_left', 'top_right'
     """
-    #min_x, max_x = ax.get_xlim()
-    #min_y, max_y = ax.get_ylim()
-
     x_left = 0.03
     x_right = 1.
     y_down = 0.03
     y_up = 1.
-    #x_left = min_x + 0.03*(max_x-min_x)
-    #x_right = max_x
-    #y_down = min_y + 0.03*(max_y-min_y)
-    #y_up = max_y
 
     if corner == 'bottom_left':
         ax.text(x_left, y_down, text, 
             horizontalalignment='left', verticalalignment='bottom',
-            size=size, transform=ax.transAxes)
+            size=size, transform=ax.transAxes, **kwargs)
     elif corner == 'bottom_right':
         ax.text(x_right, y_down, text, 
             horizontalalignment='right', verticalalignment='bottom',
-            size=size, transform=ax.transAxes)
+            size=size, transform=ax.transAxes, **kwargs)
     elif corner == 'top_left':
         ax.text(x_left, y_up, text, 
             horizontalalignment='left', verticalalignment='top',
-            size=size, transform=ax.transAxes)
+            size=size, transform=ax.transAxes, **kwargs)
     elif corner == 'top_right':
         ax.text(x_right, y_up, text, 
             horizontalalignment='right', verticalalignment='top',
-            size=size, transform=ax.transAxes)
+            size=size, transform=ax.transAxes, **kwargs)
 
-def scatterplot_line(ax, xdata, ydata, xlim, weights, p_corner='top_right'):
+def scatterplot_line(ax, xdata, ydata, eval_data=None, xlim=None, weights=None, p_corner='top_right', color='blue', text_kwargs=dict(size=8), sided=0, **kwargs):
     """ 
     Plot linear best-fit for weighted scatterplot data
     """
     inds = ~np.isnan(xdata) * ~np.isnan(ydata)
-    coefs = np.polynomial.polynomial.polyfit(xdata[inds], ydata[inds], 
-        1, w=weights[inds]/sum(weights[inds]))
-    x = np.linspace(xlim[0], xlim[1], 20)
-    fit = np.polynomial.polynomial.polyval(x, coefs)
-    ax.plot(x, fit, 'k--')
+    if weights == None:
+        coefs = np.polynomial.polynomial.polyfit(xdata[inds], ydata[inds], 1)
+    else:
+        coefs = np.polynomial.polynomial.polyfit(xdata[inds], ydata[inds], 
+            1, w=weights[inds]/sum(weights[inds]))
+    if xlim == None:
+        x = xdata
+    else:
+        x = np.linspace(xlim[0], xlim[1], 20)
+
+    inds = np.argsort(x)
+    if eval_data == None:
+        eval_data = x[inds]
+    fit = np.polynomial.polynomial.polyval(eval_data, coefs)
+
+    ax.plot(eval_data, fit, color=color, **kwargs)
+    from utils_.stats import pearsonr
     r, p = pearsonr(xdata, ydata, weights)
+
+    if sided * r > 0:
+        p = p/2
+    print r, p
     if p < 0.001:
         p_str = r'$r=%0.3g$***' % r 
+    if p < 0.01:
+        p_str = r'$r=%0.3g$**' % r         
     elif p < 0.05:
         p_str = r'$r=%0.3g$*' % r
     else:
         p_str = r'$r=%0.3g$' % r 
-    write_corner_text(ax, p_corner, p_str, size=8)
 
-def add_cax2(ax, fig, im, cbar_label, lim, fontsize=10):
-    cax = add_cax(ax, fig, left_offset=0.03)
-    cbar = fig.colorbar(im, cax=cax, ticks=lim)
+    if not p_corner == '':
+        write_corner_text(ax, p_corner, p_str, color=color, **text_kwargs)
+
+
+def add_cax(ax, fig, left_offset=0.03):
+
+    return cax
+
+def add_cax2(ax, fig, im, cbar_label, lim=None, size=10, left_offset=0.03, axis_label_offset=3, **kwargs):
+    """
+    Add colorbar axis to the right of an axis 
+    """
+    bbox = ax.get_position()
+    cax = fig.add_axes([bbox.x1+left_offset, bbox.y0, 0.03, bbox.y1-bbox.y0])    
+    cbar = fig.colorbar(im, cax=cax, **kwargs)
+    
     ticks = cax.get_ymajorticklabels()
-    [tick.set_fontsize(fontsize) for tick in ticks]
+    [tick.set_fontsize(size) for tick in ticks]
     ticks[0].set_va('bottom')
     ticks[1].set_va('top')
-    axis_label(cax, cbar_label, offset=2, axis='y', size=fontsize)
+    axis_label(cax, cbar_label, offset=axis_label_offset, axis='y', size=size)
+    return cax
 
-def letter_axis(ax, letter, axis_align=0, offset=0):
-    print letter
+def letter_axis(ax, letter, axis_align=0, offset=0, va='bottom', ha='right', **kwargs):
     min_x, max_x = ax.get_xlim()
     min_y, max_y = ax.get_ylim()
     y_pos = max_y + 0.02*(max_y-min_y)
-    #ax.text(min_x, y_pos, r"\textbf{%s}" % letter, ha='left', 
-    #    va='bottom', size=panel_letter_size)
 
-    return ax.text(axis_align, 1. + offset, r"\textbf{%s}" % letter, ha='right',
-        size=panel_letter_size, va='bottom', rotation=0, transform=ax.transAxes)
+    return ax.text(axis_align, 1. + offset, str(letter), ha=ha,
+        size=panel_letter_size, va=va, rotation=0, transform=ax.transAxes, fontproperties=bold_font)
 
 def letter_axes(axes, **kwargs):
     if isinstance(axes, list):
@@ -515,21 +554,24 @@ def set_xlim(ax, lim=None, labels=[], show_lim=True, size=tick_label_size, axis=
         except:
             pass
 
-def set_axlim(ax, lim, labels=[], show_lim=True, size=tick_label_size, axis='x'):
-    """ Set x-lim 
+def set_axlim(ax, lim=None, labels=[], show_lim=True, size=tick_label_size, axis='x', realign_ticks=True):
+    """ 
+    Set x-lim 
     """
     if np.iterable(ax) and np.iterable(show_lim):
         ax_ls = ax
         show_lim_ls = show_lim
         for ax, show_lim in izip(ax_ls, show_lim_ls):
-            set_xlim(ax, lim, labels=labels, show_lim=show_lim, size=size, 
-            axis=axis)
+            set_axlim(ax, lim, labels=labels, show_lim=show_lim, size=size, 
+                      axis=axis, realign_ticks=realign_ticks)
     elif np.iterable(ax):
         ax_ls = ax
         for ax in ax_ls:
-            set_xlim(ax, lim, labels=labels, show_lim=show_lim, size=size, 
-            axis=axis)
+            set_axlim(ax, lim, labels=labels, show_lim=show_lim, size=size, 
+                      axis=axis, realign_ticks=realign_ticks)
     else:
+        if lim == None:
+            lim = getattr(ax, 'get_%slim' % axis)()
         # get axis-dependent functions
         if axis == 'x':
             ticklabel_fn = ax.set_xticklabels
@@ -547,9 +589,16 @@ def set_axlim(ax, lim, labels=[], show_lim=True, size=tick_label_size, axis='x')
             align_dim = 'set_va'
 
 
-        lim_fn(lim)
-        tick_fn(lim)
-        if len(labels) > 0: 
+        if len(lim) > 2:
+            lim_fn([lim[0], lim[-1]])
+            tick_fn([lim[0], lim[-1]])
+        else:
+            lim_fn(lim)
+            tick_fn(lim)
+        if len(labels) > len(lim):
+            tick_fn(labels)
+            ticklabel_fn(labels, size=size)
+        elif len(labels) > 0: 
             ticklabel_fn(labels, size=size)
         elif show_lim:
             ticklabel_fn(lim, size=size)
@@ -558,8 +607,9 @@ def set_axlim(ax, lim, labels=[], show_lim=True, size=tick_label_size, axis='x')
             
         ticks = get_ticks()
         try:
-            getattr(ticks[0].label1, align_dim)(tick_alignment[0])
-            getattr(ticks[-1].label1, align_dim)(tick_alignment[1])
+            if realign_ticks:
+                getattr(ticks[0].label1, align_dim)(tick_alignment[0])
+                getattr(ticks[-1].label1, align_dim)(tick_alignment[1])
             #ticks[-1].label1.set_ha(tick_alignment[1])
         except:
             pass
@@ -624,11 +674,13 @@ def set_ylabel(ax, y_label):
 def set_xlabel(ax, x_label):
     ax.set_xlabel(x_label, size=axis_label_size) 
 
-def set_title(ax, title):
+def set_title(ax, title, size=title_size, **kwargs):
     if np.iterable(ax):
-        map(lambda axis, axis_title: set_title(axis, axis_title), ax, title)
+        map(lambda axis, axis_title: set_title(axis, axis_title, **kwargs), ax, title)
     else:
-        ax.set_title(title, size=title_size)
+        if 'fontproperties' not in kwargs:
+            kwargs['fontproperties'] = default_font
+        ax.set_title(title, size=size, **kwargs)
 
 def clear_ticks(ax):
     """ Helper function to clear axis ticks 
@@ -661,8 +713,9 @@ def subplot_binary_vec(vec, ycoord=0, ax=None, xvec=None, *args, **kwargs):
     else:
         ax.plot(xvec, vec*ycoord, **kwargs) 
 
-def legend(ax, loc='best'):
-    ax.legend(prop={'size':legend_size}, loc=loc)
+def legend(ax, loc='best', size=legend_size, edgecolor='white', **kwargs):
+    leg = ax.legend(prop=legend_font, loc=loc, **kwargs)
+    leg.get_frame().set_edgecolor(edgecolor) 
 
 def save(plot_dir, basename, verbose=False, **kwargs):
     fname = os.path.join(plot_dir, basename)
@@ -722,18 +775,47 @@ def save_and_show(fname, show):
         plt.show()
 
 def axis_label(ax, label, offset=-0.1, axis_align=0.5, size=10, 
-    axis='x'):
+    axis='x', fontproperties=ieee_fig_font, **kwargs):
     """
     """
+    kwargs['multialignment'] = kwargs.pop('multialignment', 'center')
     if axis == 'y':
-        return ax.text(offset, axis_align, label, ha='center', 
-            size=size, va='center', rotation=90, transform=ax.transAxes)
+        va = kwargs.pop('va', 'center')
+        ha = kwargs.pop('ha', 'right')
+        # ticks = ax.xaxis.get_major_ticks()
+        # va = 'top'
+        # fig_bbox = ax.figure.get_window_extent()._bbox
+        # ax_bbox = ax.get_window_extent()._bbox
+        # fig_width_inches = fig_bbox.x1 - fig_bbox.x0
+        # ax_width_inches = fig_width_inches * (ax_bbox.x1 - ax_bbox.x0)
+        # offset = -(2./72) / ax_width_inches
+        # axis_align = 0.5
+
+        return ax.text(offset, axis_align, label, ha=ha, 
+            size=size, va=va, rotation=90, transform=ax.transAxes, fontproperties=fontproperties, **kwargs)
+        
     elif axis == 'x':
+        va = 'bottom'
+        # offset = 0
+        # ticks = ax.xaxis.get_major_ticks()
+        # va = 'top'
+        # fig_bbox = ax.figure.get_window_extent()._bbox
+        # ax_bbox = ax.get_window_extent()._bbox
+        # fig_height_inches = fig_bbox.y1 - fig_bbox.y0
+        # ax_height_inches = fig_height_inches * (ax_bbox.y1 - ax_bbox.y0)
+        # offset = -(2./72) / ax_height_inches
+
+            # fig = ax.figure
+            # xform = fig.get_window_extent()._transform
+            # xform_inv = xform.inverted()
+
+            # label_inch_bbox = xform_inv.transform(ticks[0].label.get_window_extent())
+
         return ax.text(axis_align, offset, label, ha='center', 
-            size=size, va='center', rotation=0, transform=ax.transAxes)
+            size=size, va=va, rotation=0, transform=ax.transAxes, fontproperties=fontproperties, **kwargs)
 
 def xlabel(ax, label, **kwargs):
-    kwargs['offset'] = kwargs.pop('offset', -0.05)
+    kwargs['offset'] = kwargs.pop('offset', -0.1)
     if np.iterable(ax):
         map(lambda x: xlabel(x, label, **kwargs), ax)
     else:
@@ -774,6 +856,6 @@ def ylabel_widths(axes):
 
 def histogram_line(ax, data, bins, normed=True, **plot_kwargs):
     hist_data, _ = np.histogram(data, bins, normed=normed)
-    bins = bins[:-1] + bins[1]/2
+    bins = bins[:-1]# + bins[1]/2
     ax.plot(bins, hist_data, **plot_kwargs)
     return hist_data
