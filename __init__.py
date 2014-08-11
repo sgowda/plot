@@ -486,7 +486,6 @@ def scatterplot_line(ax, xdata, ydata, eval_data=None, xlim=None, weights=None, 
     fit = np.polynomial.polynomial.polyval(eval_data, coefs)
 
     ax.plot(eval_data, fit, color=color, **kwargs)
-    from utils_.stats import pearsonr
     r, p = pearsonr(xdata, ydata, weights)
 
     if sided * r > 0:
