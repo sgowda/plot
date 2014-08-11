@@ -18,30 +18,30 @@ import numpy as np
 import os.path as path
 from pylab import Circle
 import os
+from collections import OrderedDict
 
 ## Colors 
-colors = dict(
-gray          = (0.5, 0.5, 0.5),
-black         = (0., 0., 0.),
-red           = (1., 0., 0.),
-yellow        = (1., 1., 0.),
-olive         = (0.5, 0.5, 0.),
-lime          = (0., 1., 0.),
-green         = (0, 0.5, 0.),
-aqua          = (0., 1., 1.),
-teal          = (0, 0.5, 0.5),
-blue          = (0., 0., 1.),
-navy          = (0., 0., 0.5),
-fuchsia       = (1., 0., 1.),
-purple        = (0.5, 0., 0.5),
-orange        = np.array([255., 69., 0])/255,
-DarkSlateGray = np.array([47., 79.,  79.])/255,
-Maroon        = (0.5, 0., 0.),
-SteelBlue     = np.array([70., 130., 180.])/255,
-DarkViolet    = np.array([148., 0., 211.])/255,
-Aquamarine    = np.array([127., 255., 212.])/255,
-PeachPuff     = np.array([255., 218., 185])/255
-)
+colors = OrderedDict()
+colors['gray']          = (0.5, 0.5, 0.5)
+colors['black']         = (0., 0., 0.)
+colors['blue']          = (0., 0., 1.)
+colors['green']         = (0, 0.5, 0.)
+colors['fuchsia']       = (1., 0., 1.)
+colors['red']           = (1., 0., 0.)
+colors['teal']          = (0, 0.5, 0.5)
+colors['purple']        = (0.5, 0., 0.5)
+colors['DarkSlateGray'] = np.array([47., 79.,  79.])/255
+colors['yellow']        = (1., 1., 0.)
+colors['olive']         = (0.5, 0.5, 0.)
+colors['SteelBlue']     = np.array([70., 130., 180.])/255
+colors['lime']          = (0., 1., 0.)
+colors['aqua']          = (0., 1., 1.)
+colors['navy']          = (0., 0., 0.5)
+colors['orange']        = np.array([255., 69., 0])/255
+colors['Maroon']        = (0.5, 0., 0.)
+colors['DarkViolet']    = np.array([148., 0., 211.])/255
+colors['Aquamarine']    = np.array([127., 255., 212.])/255
+colors['PeachPuff']     = np.array([255., 218., 185])/255
 
 color_names = colors.keys()
 n_colors = len(color_names)
@@ -549,7 +549,10 @@ def set_axlim(ax, lim, labels=[], show_lim=True, size=tick_label_size, axis='x')
 
         lim_fn(lim)
         tick_fn(lim)
-        if len(labels) > 0: 
+        if len(labels) > 2: # more labels than just the boundaries
+            tick_fn(np.linspace(lim[0], lim[1], len(labels)))
+            ticklabel_fn(labels, size=size)
+        elif len(labels) > 0: 
             ticklabel_fn(labels, size=size)
         elif show_lim:
             ticklabel_fn(lim, size=size)
