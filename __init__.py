@@ -430,6 +430,41 @@ def write_corner_text(ax, corner, text, size=8, **kwargs):
             horizontalalignment='right', verticalalignment='top',
             size=size, transform=ax.transAxes, **kwargs)
 
+def pearsonr(x, y, weights=None):
+    x = np.array(x)
+    y = np.array(y)
+    assert len(x) == len(y)
+    N = len(x)
+    if weights == None:
+        weights = np.ones(len(x))*1./N
+    else:
+        weights = np.array(weights, dtype=np.float64)
+
+    weights = np.array(weights, dtype=np.float64)/ np.sum(weights)
+
+    inds = np.logical_and(~np.isnan(x), ~np.isnan(y))
+    x = x[inds]
+    y = y[inds]
+    weights = weights[inds]
+    
+    mean_x = np.sum(x*weights)
+    mean_y = np.sum(y*weights)
+    cov_est = sum( weights*(x-mean_x)*(y-mean_y) )
+    std_x = np.sqrt( np.sum( weights*(x-mean_x)**2 ) )
+    std_y = np.sqrt( np.sum( weights*(y-mean_y)**2 ) )
+    r = cov_est/(std_x*std_y)
+
+    # calculate p value
+    df = N-2
+    t = r*np.sqrt( float(df)/(1-r**2) )
+    
+    p = 2*(stats.t.cdf( -abs(t), df))
+
+    return r, p 
+
+
+
+
 def scatterplot_line(ax, xdata, ydata, eval_data=None, xlim=None, weights=None, p_corner='top_right', color='blue', text_kwargs=dict(size=8), sided=0, **kwargs):
     """ 
     Plot linear best-fit for weighted scatterplot data
