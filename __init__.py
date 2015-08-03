@@ -21,12 +21,12 @@ import os
 from collections import OrderedDict
 from scipy import stats
 
-default_font = fm.FontProperties(fname='/Users/sgowda/code/plotutil/Helvetica.ttf')
-bold_font = fm.FontProperties(fname='/Users/sgowda/code/plotutil/HelveticaBold.ttf')
+default_font = fm.FontProperties(fname='Helvetica.ttf')
+bold_font = fm.FontProperties(fname='HelveticaBold.ttf')
 
-ieee_fig_font = fm.FontProperties(fname='/Users/sgowda/code/plotutil/Helvetica.ttf', size=8)
-ppt_font = fm.FontProperties(fname='/Users/sgowda/code/plotutil/Helvetica.ttf', size=18)
-legend_font = fm.FontProperties(fname='/Users/sgowda/code/plotutil/Helvetica.ttf', size=8)
+ieee_fig_font = fm.FontProperties(fname='Helvetica.ttf', size=8)
+ppt_font = fm.FontProperties(fname='Helvetica.ttf', size=18)
+legend_font = fm.FontProperties(fname='Helvetica.ttf', size=8)
 
 ## Colors 
 colors = OrderedDict()
