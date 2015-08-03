@@ -19,12 +19,14 @@ import os.path as path
 from pylab import Circle
 import os
 from collections import OrderedDict
+from scipy import stats
 
 default_font = fm.FontProperties(fname='/Users/sgowda/code/plotutil/Helvetica.ttf')
 bold_font = fm.FontProperties(fname='/Users/sgowda/code/plotutil/HelveticaBold.ttf')
 
 ieee_fig_font = fm.FontProperties(fname='/Users/sgowda/code/plotutil/Helvetica.ttf', size=8)
-legend_font = fm.FontProperties(fname='/Users/sgowda/code/plotutil/Helvetica.ttf', size=6)
+ppt_font = fm.FontProperties(fname='/Users/sgowda/code/plotutil/Helvetica.ttf', size=18)
+legend_font = fm.FontProperties(fname='/Users/sgowda/code/plotutil/Helvetica.ttf', size=8)
 
 ## Colors 
 colors = OrderedDict()
@@ -58,9 +60,9 @@ n_colors = len(color_names)
 
 ## Constants 
 panel_letter_size = 12
-title_size = 12
-tick_label_size = 10
-axis_label_size = 10
+title_size = 8
+tick_label_size = 8
+axis_label_size = 8
 legend_size = 8
 
 beamer_figsize = (5,3)
@@ -113,8 +115,8 @@ def label(ax, pt, text):
 ## Tools for manipulating matplotlib figures 
 def subplots(n_vert_plots, n_horiz_plots, x=0.03, y=0.05, left_offset=0.06, right_offset=0.,
     aspect=None, top_offset=0, bottom_offset=0.075, return_flat=False, show_ur_lines=False,
-    hold=False, ylabels=False, sep_ylabels=False, xlabels=False, 
-    sep_xlabels=False, letter_offset=None, fig=None):
+    hold=True, ylabels=False, sep_ylabels=False, xlabels=False, 
+    sep_xlabels=False, letter_offset=None, fig=None, **kwargs):
     """
     An implementation of the subplots function
 
@@ -143,9 +145,9 @@ def subplots(n_vert_plots, n_horiz_plots, x=0.03, y=0.05, left_offset=0.06, righ
             xstart = left_offset + x/2 + horiz_frac_per_col*n 
             ystart = bottom_offset + y/2 + (n_vert_plots - 1 - m)*vert_frac_per_row
             if aspect is not None:
-                new_ax = fn([xstart, ystart, subplot_width, subplot_height], aspect=aspect)
+                new_ax = fn([xstart, ystart, subplot_width, subplot_height], aspect=aspect, **kwargs)
             else:
-                new_ax = fn([xstart, ystart, subplot_width, subplot_height])
+                new_ax = fn([xstart, ystart, subplot_width, subplot_height], **kwargs)
 
             if not show_ur_lines:
                 elim_ur_lines(new_ax)
@@ -164,6 +166,92 @@ def subplots(n_vert_plots, n_horiz_plots, x=0.03, y=0.05, left_offset=0.06, righ
         axes = axes.ravel()
 
     return axes
+
+text_height = 0.1 # inches
+inches_per_point = 0.0138888889
+inches_per_newline = 0.0437391513912007
+
+
+def subplots2(n_vert_plots, n_horiz_plots, x=0.03, y=1, left_offset=0, right_offset=None,
+    top_offset=1, bottom_offset=1, return_flat=False, left_fig_offset_frac=0, right_fig_offset_frac=0, 
+    top_fig_frac_offset=0, bottom_fig_frac_offset=0, border=0, hold=True, fig=None, font=ieee_fig_font, sharex=False, **kwargs):
+    """
+    An implementation of the subplots function
+
+    Parameters
+    ==========
+
+    Returns
+    =======
+    """    
+    if fig == None:
+        fig = plt.gcf()
+    fig_width_inches = fig.bbox._bbox.x1 - fig.bbox._bbox.x0
+    fig_height_inches = fig.bbox._bbox.y1 - fig.bbox._bbox.y0
+
+
+    left_fig_offset_frac = max(left_fig_offset_frac, border)
+    right_fig_offset_frac = max(right_fig_offset_frac, border)
+    top_fig_frac_offset = max(top_fig_frac_offset, border)
+    bottom_fig_frac_offset = max(bottom_fig_frac_offset, border)
+
+
+    try:
+        text_height_ = text_height_inches('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVXYZ', fontproperties=font)
+    except RuntimeError:
+        text_height_ = text_height
+
+
+    top_offset = top_fig_frac_offset + (4*inches_per_point + top_offset*text_height_ + (top_offset-1)*inches_per_newline)/fig_height_inches
+    bottom_offset = bottom_fig_frac_offset + (4*inches_per_point + bottom_offset*text_height_ + (bottom_offset-1)*inches_per_newline)/fig_height_inches
+    left_offset = left_fig_offset_frac + x + (4*inches_per_point + left_offset*text_height_ + (left_offset-1)*inches_per_newline)/fig_width_inches
+    if right_offset == None:
+        right_offset = right_fig_offset_frac + 4*inches_per_point/fig_width_inches
+    y = (4*inches_per_point + 4*inches_per_point + y*text_height_ + (y-1)*inches_per_newline)/fig_height_inches
+
+    vert_frac_per_row = (1.-bottom_offset-top_offset - y*(n_vert_plots-1))/n_vert_plots
+    horiz_frac_per_col = (1.-left_offset-right_offset - x*(n_horiz_plots-1))/n_horiz_plots
+    subplot_width = horiz_frac_per_col
+    subplot_height = vert_frac_per_row
+
+    if fig is not None:
+        fn = fig.add_axes
+    else:
+        fn = plt.axes
+
+    axes = []
+    for m in range(n_vert_plots):
+        axes_row = []
+        for n in range(n_horiz_plots):
+            xstart = left_offset + horiz_frac_per_col*n + n*x
+            ystart = bottom_offset + (n_vert_plots - 1 - m)*(vert_frac_per_row + y)
+
+            if m == 0 and n > 0 and sharex:
+                new_ax = fn([xstart, ystart, subplot_width, subplot_height], sharex=axes_row[0], **kwargs)
+            elif (m > 0 or n > 0) and sharex:
+                new_ax = fn([xstart, ystart, subplot_width, subplot_height], sharex=axes[0][0], **kwargs)
+            else:
+                new_ax = fn([xstart, ystart, subplot_width, subplot_height], **kwargs)
+
+
+            elim_ur_lines(new_ax)
+
+            # set hold property for ax
+            new_ax.hold(hold)
+
+            axes_row.append(new_ax)
+        axes.append(axes_row)
+
+    axes = np.array(axes)
+
+    if return_flat:
+        axes = axes.ravel()
+
+    return axes
+
+
+
+
 
 def gen_radial_axes(n_targ=8, x_max=0.3, y_max=0.15, plot_start_rad=0.2,
         offset=0.44):
@@ -259,7 +347,6 @@ def set_ticklabel_size(ax, xsize=tick_label_size, ysize=None):
     if np.iterable(ax):
         map(lambda x: set_ticklabel_size(x, xsize=xsize, ysize=ysize), ax)
         return 
-
         
     if ysize == None:
         ysize = xsize
@@ -334,35 +421,61 @@ def color_gradient(n_pts, start_color=(0,1,0), end_color=(1,0,0)):
     return colors
 
 def _plot_one_bar(ax, data, ctr, fn=np.mean, width=0.05, c='blue', s=60, m='o', 
-    label=None, show_data=True, data_to_show='pts', edgecolor='none', facecolor='none'):
+    label=None, show_data=True, data_to_show='pts', edgecolor='none', facecolor='none', linewidth=3, **kwargs):
     """ Generate a single bar plot
     """ 
     if edgecolor == 'none':
         edgecolor = c
     n_data_pts = len(data)
-    ax.bar(ctr-width/4, fn(data), width=width/2, color=facecolor, edgecolor=edgecolor, 
-        linewidth=3)
+    ax.bar(ctr-width/4, fn(data), width=width/2, color=facecolor, edgecolor='black', facecolor=c,
+        linewidth=linewidth, label=label, hatch=kwargs.pop('hatch', None))
     if show_data:
         if data_to_show == 'pts':
-            ax.scatter(np.ones(n_data_pts)*ctr, data, c=c, s=s, marker=m, 
-                label=label)
+            ax.scatter(np.ones(n_data_pts)*ctr, data, c=c, s=s, marker=m)
         elif data_to_show == 'std':
             std = np.std(data)
-            ax.plot([ctr, ctr], [fn(data)-std, fn(data)+std], 
-                color=c, label=label, linewidth=2)
+            ax.plot([ctr, ctr], [fn(data)-std, fn(data)+std], color='black', linewidth=2)
+        elif data_to_show == 'sem':
+            from scipy.stats import sem
+            std = sem(data)
+            ax.plot([ctr, ctr], [fn(data)-std, fn(data)+std], color='black', linewidth=2)            
 
-def sig_line(ax, left, right, ypt, text):
-    """ Plot the square brace indicating that two bar plots are significantly
+def plot_asterisks(ax, x, y, text, pt_offset=2, ycoords='axis', **kwargs):
+    if ycoords == 'axis':
+        trans = ax.get_xaxis_transform()
+        rel_offset = pt_offset*inches_per_point/_get_ax_height_inches(ax)
+        ax.text(x, y + rel_offset, text, ha='center', va='bottom', size=8, transform=trans, **kwargs)        
+    elif ycoords == 'data':
+        data_units_per_inch = np.diff(ax.get_ylim())[0] / _get_ax_height_inches(ax)
+        rel_offset = pt_offset*inches_per_point * data_units_per_inch
+        ax.text(x, y + rel_offset, text, ha='center', va='bottom', size=8, **kwargs)        
+
+
+def sig_line(ax, left, right, text, ypt=0.9, pt_offset=0):
+    """ 
+    Plot the square brace indicating that two bar plots are significantly
     different
     """
-    props = dict(connectionstyle='bar', arrowstyle='-', shrinkA=20, shrinkB=20, lw=2)
-    ax.annotate(text, xy=(float(left+right)/2, ypt), zorder=10, ha='center')
-    ax.annotate('', xy=(left, ypt), xytext=(right, ypt), arrowprops=props)    
+    # TODO the 1.02 factor should be (optimally) specified as 4 "points", not as a fraction of the size of the axis!
+    trans = ax.get_xaxis_transform()
+    plot_asterisks(ax, float(left+right)/2, ypt, text, pt_offset=pt_offset)
+    # rel_offset = 2*inches_per_point/_get_ax_height_inches(ax)
+    # ax.text(float(left+right)/2, ypt + rel_offset, text, ha='center', va='bottom', size=8, transform=trans)
+    ylim = ax.get_ylim()
+    ax.plot([left, right], [ypt, ypt], color='black', transform=trans)
+    ax.set_ylim(ylim)
+
+def bar_plot_test(data_a, data_b, ax, **kwargs):
+    bar_plot([data_a, data_b], ax=ax, data_to_show='sem', **kwargs)
+    from scipy.stats import kruskal
+    _, p = kruskal(data_a, data_b)
+    ast = p_val_to_asterisks(p)
+    sig_line(ax, 0, 0.05, ast, pt_offset=0)
 
 def bar_plot(data, ax=None, sig_pairs=[], ypts=[], 
     colors=['green', 'red', 'magenta', 'blue'], markers=['o', 's', '^', '*'],
     bar_width=0.05, labels=None, show_data=True, data_to_show='pts', 
-    fn=np.mean, hide_bar=False, shade_bar=False, start_vals=[], x_offset=0, **kwargs):
+    fn=np.mean, hide_bar=False, shade_bar=False, start_vals=[], x_offset=0, hatching=None, **kwargs):
     """ Bar plot
     """
     # TODO implement hide_bar, shaded, start_vals
@@ -385,26 +498,32 @@ def bar_plot(data, ax=None, sig_pairs=[], ypts=[],
         #print ctr
         #ticks.append(ctr)
         label = None if labels == None else labels[k]
+
+        if hatching is not None:
+            hatch = hatching[k]
+        else:
+            hatch = None
         
         if isinstance(data, np.ndarray):
             _plot_one_bar(
                 ax, data[:,k], ctr, width=bar_width, c=colors[k], 
                 m=markers[k], label=label, show_data=show_data, 
-                data_to_show=data_to_show, fn=fn)
+                data_to_show=data_to_show, fn=fn, hatch=hatch, **kwargs)
         elif isinstance(data, list):
             _plot_one_bar(
                 ax, data[k], ctr, width=bar_width, c=colors[k], 
                 m=markers[k], label=label, show_data=show_data,
-                data_to_show=data_to_show, fn=fn)
+                data_to_show=data_to_show, fn=fn, hatch=hatch, **kwargs)
     ax.set_xlim([-bar_width*0.5, (n_data_bars - 0.5)*bar_width])
     ax.set_xticks(ticks)
 
     for k, pair in enumerate(sig_pairs):
         x, y = pair
         sig_line(ax, ticks[x], ticks[y], ypts[k])
+    return ticks
     #return [-bar_width*0.5, (n_data_bars - 0.5)*bar_width]
 
-def write_corner_text(ax, corner, text, size=8, **kwargs):
+def write_corner_text(ax, corner, text, fontproperties=ieee_fig_font, **kwargs):
     """ Write text in one of the corners 'bottom_left', 'bottom_right',
     'top_left', 'top_right'
     """
@@ -413,22 +532,28 @@ def write_corner_text(ax, corner, text, size=8, **kwargs):
     y_down = 0.03
     y_up = 1.
 
+
+    if isinstance(corner, tuple):
+        ax.text(corner[0], corner[1], text, 
+            horizontalalignment='left', verticalalignment='bottom',
+            fontproperties=fontproperties, transform=ax.transAxes, **kwargs)
+
     if corner == 'bottom_left':
         ax.text(x_left, y_down, text, 
             horizontalalignment='left', verticalalignment='bottom',
-            size=size, transform=ax.transAxes, **kwargs)
+            fontproperties=fontproperties, transform=ax.transAxes, **kwargs)
     elif corner == 'bottom_right':
         ax.text(x_right, y_down, text, 
             horizontalalignment='right', verticalalignment='bottom',
-            size=size, transform=ax.transAxes, **kwargs)
+            fontproperties=fontproperties, transform=ax.transAxes, **kwargs)
     elif corner == 'top_left':
         ax.text(x_left, y_up, text, 
             horizontalalignment='left', verticalalignment='top',
-            size=size, transform=ax.transAxes, **kwargs)
+            fontproperties=fontproperties, transform=ax.transAxes, **kwargs)
     elif corner == 'top_right':
         ax.text(x_right, y_up, text, 
             horizontalalignment='right', verticalalignment='top',
-            size=size, transform=ax.transAxes, **kwargs)
+            fontproperties=fontproperties, transform=ax.transAxes, **kwargs)
 
 def pearsonr(x, y, weights=None):
     x = np.array(x)
@@ -462,20 +587,54 @@ def pearsonr(x, y, weights=None):
 
     return r, p 
 
+def scatter(ax, x, y=None, **kwargs):
+    if y == None:
+        y = x
+        x = np.arange(len(y))
+    ax.scatter(x, y, **kwargs)
 
+def clean_up_ticks(axes, font=ieee_fig_font):
+    if np.iterable(axes):
+        for ax in axes.ravel():
+            clean_up_ticks(ax, font=font)
+        
+    else:
+        set_axlim(axes, axis='x')
+        set_axlim(axes, axis='y')
+        set_ticklabel_size(axes, xsize=8, ysize=8)
 
+        ax = axes
+        for tick in ax.xaxis.get_major_ticks():
+            tick.label.set_font_properties(font)
+            
+        for tick in ax.yaxis.get_major_ticks():
+            tick.label.set_font_properties(font)        
 
-def scatterplot_line(ax, xdata, ydata, eval_data=None, xlim=None, weights=None, p_corner='top_right', color='blue', text_kwargs=dict(size=8), sided=0, **kwargs):
+def p_val_to_asterisks(p):
+    if p < 0.001:
+        return '***'
+    elif p < 0.01:
+        return '**'
+    elif p < 0.05:
+        return '*'
+    else:
+        return 'ns'
+
+def scatterplot_line(ax, xdata, ydata=None, eval_data=None, xlim=None, weights=None, p_corner='top_right', color='blue', 
+    text_kwargs=dict(size=8), sided=0, verbose=False, write_rsq=False, **kwargs):
     """ 
     Plot linear best-fit for weighted scatterplot data
     """
+    if ydata is None:
+        ydata = xdata
+        xdata = np.arange(len(ydata))
     inds = ~np.isnan(xdata) * ~np.isnan(ydata)
     if weights == None:
         coefs = np.polynomial.polynomial.polyfit(xdata[inds], ydata[inds], 1)
     else:
         coefs = np.polynomial.polynomial.polyfit(xdata[inds], ydata[inds], 
             1, w=weights[inds]/sum(weights[inds]))
-    if xlim == None:
+    if xlim is None:
         x = xdata
     else:
         x = np.linspace(xlim[0], xlim[1], 20)
@@ -490,25 +649,23 @@ def scatterplot_line(ax, xdata, ydata, eval_data=None, xlim=None, weights=None, 
 
     if sided * r > 0:
         p = p/2
-    print r, p
+
     if p < 0.001:
-        p_str = r'$r=%0.3g$***' % r 
+        p_str = r'$r=%0.3g$***' % r if not write_rsq else r'$r^2=%0.3g$***' % r**2 
     if p < 0.01:
-        p_str = r'$r=%0.3g$**' % r         
+        p_str = r'$r=%0.3g$**' % r if not write_rsq else r'$r^2=%0.3g$**' % r**2 
     elif p < 0.05:
-        p_str = r'$r=%0.3g$*' % r
+        p_str = r'$r=%0.3g$*' % r if not write_rsq else r'$r^2=%0.3g$*' % r**2 
+    elif verbose:
+        p_str = r'$r=%0.3g, p=%0.2g$' % (r, p) 
     else:
-        p_str = r'$r=%0.3g$' % r 
+        p_str = r'$r=%0.3g$' % (r,)
 
     if not p_corner == '':
-        write_corner_text(ax, p_corner, p_str, color=color, **text_kwargs)
+        write_corner_text(ax, p_corner, p_str, **text_kwargs)
 
 
-def add_cax(ax, fig, left_offset=0.03):
-
-    return cax
-
-def add_cax2(ax, fig, im, cbar_label, lim=None, size=10, left_offset=0.03, axis_label_offset=3, **kwargs):
+def add_cax2(ax, fig, im, cbar_label, lim=None, font=ieee_fig_font, left_offset=0.03, axis_label_offset=3, **kwargs):
     """
     Add colorbar axis to the right of an axis 
     """
@@ -517,11 +674,13 @@ def add_cax2(ax, fig, im, cbar_label, lim=None, size=10, left_offset=0.03, axis_
     cbar = fig.colorbar(im, cax=cax, **kwargs)
     
     ticks = cax.get_ymajorticklabels()
-    [tick.set_fontsize(size) for tick in ticks]
+    [tick.set_font_properties(font) for tick in ticks]
     ticks[0].set_va('bottom')
     ticks[1].set_va('top')
-    axis_label(cax, cbar_label, offset=axis_label_offset, axis='y', size=size)
-    return cax
+    caxis_label(cax, cbar_label, axis='y', line_offset=-0.5, fontproperties=font)
+    return cax, cbar
+
+add_cax = add_cax2
 
 def letter_axis(ax, letter, axis_align=0, offset=0, va='bottom', ha='right', **kwargs):
     min_x, max_x = ax.get_xlim()
@@ -531,13 +690,72 @@ def letter_axis(ax, letter, axis_align=0, offset=0, va='bottom', ha='right', **k
     return ax.text(axis_align, 1. + offset, str(letter), ha=ha,
         size=panel_letter_size, va=va, rotation=0, transform=ax.transAxes, fontproperties=bold_font)
 
+def letter_row(axes, first_letter='A', pt_offset=4, xfrac=0.5):
+    axes = axes.ravel()
+    axes_x_extent = np.vstack([(ax.bbox._bbox.x0, ax.bbox._bbox.x1) for ax in axes])
+    axes_x_space_fig_frac = np.max(axes_x_extent[1:,0] - axes_x_extent[:-1, 1])
+
+    axes_y_extent = np.vstack([(ax.bbox._bbox.y0, ax.bbox._bbox.y1) for ax in axes])
+    axes_y_space_fig_frac = np.max(axes_y_extent[1:,0] - axes_y_extent[:-1, 1])
+
+    fig = axes[0].figure
+    n_axes = len(axes)
+    for k in range(n_axes):
+        letter = chr(k + ord(first_letter))
+        fig_height_inches = fig.bbox._bbox.y1 - fig.bbox._bbox.y0
+        offset = (text_height/2 + pt_offset*inches_per_point)/fig_height_inches
+        fig.text(axes_x_extent[k,0] - xfrac*axes_x_space_fig_frac, axes_y_extent[k,1] + offset, letter, ha='left', va='bottom', size=12, fontproperties=bold_font)
+    return axes_x_space_fig_frac/2, 0.98
+
+def letter_col(axes, first_letter='A', pt_offset=4, yfrac=0.0):
+    axes = axes.ravel()
+    axes_x_extent = np.vstack([(ax.bbox._bbox.x0, ax.bbox._bbox.x1) for ax in axes])
+    axes_x_space_fig_frac = np.max(axes_x_extent[1:,0] - axes_x_extent[:-1, 1])
+
+    axes_y_extent = np.vstack([(ax.bbox._bbox.y0, ax.bbox._bbox.y1) for ax in axes])
+    axes_y_space_fig_frac = np.max(axes_y_extent[:-1, 1] - axes_y_extent[1:,1])
+
+    print axes_y_extent
+    print axes_y_space_fig_frac
+
+    fig = axes[0].figure
+    n_axes = len(axes)
+    for k in range(n_axes):
+        letter = chr(k + ord(first_letter))
+        fig_width_inches = fig.bbox._bbox.x1 - fig.bbox._bbox.x0
+        offset = (text_height/2 + pt_offset*inches_per_point)/fig_width_inches
+        fig.text(0.5*offset, axes_y_extent[k,1] + yfrac*axes_y_space_fig_frac, letter, ha='left', va='bottom', size=12, fontproperties=bold_font)
+    return axes_x_space_fig_frac/2, 0.98
+
+def title_multi_axis(axes, title, line_offset=1):
+    axes = axes.ravel()
+    axes_x_extent = np.vstack([(ax.bbox._bbox.x0, ax.bbox._bbox.x1) for ax in axes])
+    axes_x_space_fig_frac = np.max(axes_x_extent[1:,0] - axes_x_extent[:-1, 1])
+    x_min = min(axes_x_extent.ravel())
+    x_max = max(axes_x_extent.ravel())
+    x = (x_min + x_max)/2
+        
+    axes_y_extent = np.vstack([(ax.bbox._bbox.y0, ax.bbox._bbox.y1) for ax in axes])
+    # axes_y_space_fig_frac = np.max(axes_y_extent[1:,0] - axes_y_extent[:-1, 1])
+
+    try:
+        text_height_ = text_height_inches(title)
+    except RuntimeError:
+        text_height_ = text_height
+
+    fig = axes[0].figure
+    dist_from_axis = (4*inches_per_point + line_offset*(inches_per_newline+text_height_))/_get_fig_height_inches(fig) 
+    fig.text(x, axes_y_extent[0,1] + dist_from_axis, title, ha='center', va='bottom', size=8, fontproperties=ieee_fig_font)
+
 def letter_axes(axes, **kwargs):
+    # TODO determine the left starting point of each label relative to the 
+    # axis by determining the spacing between the axes 
     if isinstance(axes, list):
         [letter_axis(ax, chr(k+65), **kwargs) for k, ax in enumerate(axes)]
     elif isinstance(axes, np.ndarray):
         [letter_axis(ax, chr(k+65), **kwargs) for k, ax in enumerate(axes.ravel())]
 
-def set_xlim(ax, lim=None, labels=[], show_lim=True, size=tick_label_size, axis='x'):
+def set_xlim(ax, lim=None, labels=[], show_lim=True, size=tick_label_size, axis='x',):
     """ Set x-lim 
     """
     if np.iterable(ax) and np.iterable(show_lim):
@@ -584,11 +802,10 @@ def set_xlim(ax, lim=None, labels=[], show_lim=True, size=tick_label_size, axis=
         try:
             getattr(ticks[0].label1, align_dim)(tick_alignment[0])
             getattr(ticks[-1].label1, align_dim)(tick_alignment[1])
-            #ticks[-1].label1.set_ha(tick_alignment[1])
         except:
             pass
 
-def set_axlim(ax, lim=None, labels=[], show_lim=True, size=tick_label_size, axis='x', realign_ticks=True):
+def set_axlim(ax, lim=None, labels=[], show_lim=True, size=tick_label_size, axis='x', realign_ticks=False, font=ieee_fig_font):
     """ 
     Set x-lim 
     """
@@ -596,16 +813,18 @@ def set_axlim(ax, lim=None, labels=[], show_lim=True, size=tick_label_size, axis
         ax_ls = ax
         show_lim_ls = show_lim
         for ax, show_lim in izip(ax_ls, show_lim_ls):
-            set_axlim(ax, lim, labels=labels, show_lim=show_lim, size=size, 
+            set_axlim(ax, lim, labels=labels, show_lim=show_lim, font=font, 
                       axis=axis, realign_ticks=realign_ticks)
     elif np.iterable(ax):
         ax_ls = ax
         for ax in ax_ls:
-            set_axlim(ax, lim, labels=labels, show_lim=show_lim, size=size, 
+            set_axlim(ax, lim, labels=labels, show_lim=show_lim, font=font, 
                       axis=axis, realign_ticks=realign_ticks)
     else:
+        # if no limits are specified, then just use the current axis limits already in the plot
         if lim == None:
             lim = getattr(ax, 'get_%slim' % axis)()
+
         # get axis-dependent functions
         if axis == 'x':
             ticklabel_fn = ax.set_xticklabels
@@ -621,30 +840,32 @@ def set_axlim(ax, lim=None, labels=[], show_lim=True, size=tick_label_size, axis
             get_ticks = ax.yaxis.get_major_ticks
             tick_alignment = ['bottom', 'top']
             align_dim = 'set_va'
+        elif axis == 'z':
+            ticklabel_fn = ax.set_zticklabels
+            lim_fn = ax.set_zlim
+            tick_fn = ax.set_zticks
+            get_ticks = ax.zaxis.get_major_ticks
+            tick_alignment = ['bottom', 'top']
+            align_dim = 'set_va'            
 
 
-        if len(lim) > 2:
-            lim_fn([lim[0], lim[-1]])
-            tick_fn([lim[0], lim[-1]])
-        else:
-            lim_fn(lim)
-            tick_fn(lim)
+        lim_fn([lim[0], lim[-1]])
+        tick_fn(lim)
         if len(labels) > len(lim):
             tick_fn(labels)
-            ticklabel_fn(labels, size=size)
+            ticklabel_fn(labels, fontproperties=font)
         elif len(labels) > 0: 
-            ticklabel_fn(labels, size=size)
+            ticklabel_fn(labels, fontproperties=font)
         elif show_lim:
-            ticklabel_fn(lim, size=size)
+            ticklabel_fn(lim, fontproperties=font)
         else:
-            ticklabel_fn([], size=size)
+            ticklabel_fn([], fontproperties=font)
             
         ticks = get_ticks()
         try:
             if realign_ticks:
                 getattr(ticks[0].label1, align_dim)(tick_alignment[0])
                 getattr(ticks[-1].label1, align_dim)(tick_alignment[1])
-            #ticks[-1].label1.set_ha(tick_alignment[1])
         except:
             pass
 
@@ -697,6 +918,10 @@ def set_ylim_min(ax, min_lim):
     current_ylim = ax.get_ylim()
     ax.set_ylim( [min_lim, current_ylim[1]] )
 
+def set_xlim_min(ax, min_lim):
+    current_xlim = ax.get_xlim()
+    ax.set_xlim( [min_lim, current_xlim[1]] )    
+
 def set_labels(ax, xlabel='', ylabel='', size=None):
     if size == None: size=axis_label_size
     ax.set_xlabel(xlabel, size=size)
@@ -708,13 +933,46 @@ def set_ylabel(ax, y_label):
 def set_xlabel(ax, x_label):
     ax.set_xlabel(x_label, size=axis_label_size) 
 
-def set_title(ax, title, size=title_size, **kwargs):
+def set_title(ax, title, **kwargs):
     if np.iterable(ax):
         map(lambda axis, axis_title: set_title(axis, axis_title, **kwargs), ax, title)
     else:
         if 'fontproperties' not in kwargs:
-            kwargs['fontproperties'] = default_font
-        ax.set_title(title, size=size, **kwargs)
+            kwargs['fontproperties'] = ieee_fig_font
+        line_offset = kwargs.pop('line_offset', 0)
+        axis_height_inches = _get_ax_height_inches(ax)
+
+        try:
+            text_height_ = text_height_inches(title)
+        except RuntimeError:
+            text_height_ = text_height
+
+        dist_from_axis = (4*inches_per_point + line_offset*(inches_per_newline+text_height_))/axis_height_inches        
+        ax.text(0.5, 1 + dist_from_axis, title, ha='center', va='bottom', rotation=0, transform=ax.transAxes, **kwargs)
+
+def _get_ax_height_inches(ax):
+    fig = ax.figure
+    fig_width_inches = fig.bbox._bbox.x1 - fig.bbox._bbox.x0
+    fig_height_inches = fig.bbox._bbox.y1 - fig.bbox._bbox.y0
+
+    axis_window_extent = ax.get_window_extent()._bbox
+    axis_yextent_rel = axis_window_extent.y1 - axis_window_extent.y0
+    axis_height_inches = fig_height_inches * axis_yextent_rel
+    return axis_height_inches    
+
+def _get_ax_width_inches(ax):
+    fig = ax.figure
+    fig_width_inches = fig.bbox._bbox.x1 - fig.bbox._bbox.x0
+    fig_height_inches = fig.bbox._bbox.y1 - fig.bbox._bbox.y0
+
+    axis_window_extent = ax.get_window_extent()._bbox
+    axis_xextent_rel = axis_window_extent.x1 - axis_window_extent.x0
+    axis_height_inches = fig_width_inches * axis_xextent_rel
+    return axis_height_inches
+
+def _get_fig_height_inches(fig):
+    fig_height_inches = fig.bbox._bbox.y1 - fig.bbox._bbox.y0
+    return fig_height_inches
 
 def clear_ticks(ax):
     """ Helper function to clear axis ticks 
@@ -748,6 +1006,7 @@ def subplot_binary_vec(vec, ycoord=0, ax=None, xvec=None, *args, **kwargs):
         ax.plot(xvec, vec*ycoord, **kwargs) 
 
 def legend(ax, loc='best', size=legend_size, edgecolor='white', **kwargs):
+    legend_font = fm.FontProperties(fname='/Users/sgowda/code/plotutil/Helvetica.ttf', size=size)
     leg = ax.legend(prop=legend_font, loc=loc, **kwargs)
     leg.get_frame().set_edgecolor(edgecolor) 
 
@@ -808,48 +1067,79 @@ def save_and_show(fname, show):
     if show:
         plt.show()
 
-def axis_label(ax, label, offset=-0.1, axis_align=0.5, size=10, 
-    axis='x', fontproperties=ieee_fig_font, **kwargs):
+def text_height_inches(label, fontproperties=ieee_fig_font, **kwargs):
+    test_fig = plt.figure()    
+    test_ax = plt.subplot(111)
+
+    label_obj = test_ax.text(0.5, 0.5, label, rotation=0, transform=test_ax.transAxes, fontproperties=fontproperties, **kwargs)
+
+    plt.show()
+    try:
+        bbox = label_obj.get_window_extent()
+        return (bbox.y1 - bbox.y0)/test_fig.dpi
+    except:
+        return text_height
+    finally:
+        plt.close(test_fig)
+        
+    
+
+
+def axis_label(ax, label, offset=None, axis_align=0.5, size=8, 
+    axis='x', line_offset=0, fontproperties=ieee_fig_font, **kwargs):
     """
     """
     kwargs['multialignment'] = kwargs.pop('multialignment', 'center')
+
+    try:
+        text_height_ = text_height_inches('aA', fontproperties=fontproperties, **kwargs)
+    except RuntimeError:
+        text_height_ = text_height
+
+    if offset == None and axis == 'x':
+        axis_height_inches = _get_ax_height_inches(ax)
+        dist_from_axis = (-4*inches_per_point - line_offset*(inches_per_newline+text_height_))/axis_height_inches
+    elif offset == None and axis == 'y':
+        axis_width_inches = _get_ax_width_inches(ax)
+        dist_from_axis = (-4*inches_per_point - line_offset*(inches_per_newline+text_height_))/axis_width_inches
+    else:
+        dist_from_axis = offset
+
     if axis == 'y':
-        va = kwargs.pop('va', 'center')
-        ha = kwargs.pop('ha', 'right')
-        # ticks = ax.xaxis.get_major_ticks()
-        # va = 'top'
-        # fig_bbox = ax.figure.get_window_extent()._bbox
-        # ax_bbox = ax.get_window_extent()._bbox
-        # fig_width_inches = fig_bbox.x1 - fig_bbox.x0
-        # ax_width_inches = fig_width_inches * (ax_bbox.x1 - ax_bbox.x0)
-        # offset = -(2./72) / ax_width_inches
-        # axis_align = 0.5
-
-        return ax.text(offset, axis_align, label, ha=ha, 
-            size=size, va=va, rotation=90, transform=ax.transAxes, fontproperties=fontproperties, **kwargs)
-        
+        return ax.text(dist_from_axis, 0.5, label, ha='right', va='center', rotation=90, transform=ax.transAxes, fontproperties=fontproperties, **kwargs)
     elif axis == 'x':
-        va = 'bottom'
-        # offset = 0
-        # ticks = ax.xaxis.get_major_ticks()
-        # va = 'top'
-        # fig_bbox = ax.figure.get_window_extent()._bbox
-        # ax_bbox = ax.get_window_extent()._bbox
-        # fig_height_inches = fig_bbox.y1 - fig_bbox.y0
-        # ax_height_inches = fig_height_inches * (ax_bbox.y1 - ax_bbox.y0)
-        # offset = -(2./72) / ax_height_inches
+        return ax.text(0.5, dist_from_axis, label, ha='center', va='top', rotation=0, transform=ax.transAxes, fontproperties=fontproperties, **kwargs)
 
-            # fig = ax.figure
-            # xform = fig.get_window_extent()._transform
-            # xform_inv = xform.inverted()
+def caxis_label(ax, label, offset=None, axis_align=0.5, size=8, 
+    axis='x', line_offset=0, fontproperties=ieee_fig_font, **kwargs):
+    """
+    this function is the same as the axis_label function, but the axis is on the opposite sides
+    """
+    kwargs['multialignment'] = kwargs.pop('multialignment', 'center')
 
-            # label_inch_bbox = xform_inv.transform(ticks[0].label.get_window_extent())
+    try:
+        text_height_ = text_height_inches(label, fontproperties=fontproperties, **kwargs)
+    except RuntimeError:
+        text_height_ = text_height
 
-        return ax.text(axis_align, offset, label, ha='center', 
-            size=size, va=va, rotation=0, transform=ax.transAxes, fontproperties=fontproperties, **kwargs)
+    if offset == None and axis == 'x':
+        axis_height_inches = _get_ax_height_inches(ax)
+        dist_from_axis = (-4*inches_per_point - line_offset*(inches_per_newline+text_height_))/axis_height_inches
+    elif offset == None and axis == 'y':
+        axis_width_inches = _get_ax_width_inches(ax)
+        dist_from_axis = (-4*inches_per_point - line_offset*(inches_per_newline+text_height_))/axis_width_inches
+    else:
+        dist_from_axis = offset
+
+    if axis == 'y':
+        return ax.text(dist_from_axis, 0.5, label, ha='left', va='center', rotation=90, transform=ax.transAxes, fontproperties=fontproperties, **kwargs)
+    elif axis == 'x':
+        print dist_from_axis
+        return ax.text(0.5, dist_from_axis, label, ha='center', va='bottom', rotation=0, transform=ax.transAxes, fontproperties=fontproperties, **kwargs)
+
 
 def xlabel(ax, label, **kwargs):
-    kwargs['offset'] = kwargs.pop('offset', -0.1)
+    # kwargs['offset'] = kwargs.pop('offset', -0.1)
     if np.iterable(ax):
         map(lambda x: xlabel(x, label, **kwargs), ax)
     else:
@@ -857,14 +1147,99 @@ def xlabel(ax, label, **kwargs):
         return axis_label(ax, label, axis='x', **kwargs)
 
 def ylabel(ax, label, **kwargs):
-    kwargs['offset'] = kwargs.pop('offset', -0.03)
+    # kwargs['offset'] = kwargs.pop('offset', -0.03)
     if np.iterable(ax):
         map(lambda x: ylabel(x, label, **kwargs), ax)
     else:
         kwargs.pop('axis', 'y')
         return axis_label(ax, label, axis='y', **kwargs)
 
+def histogram2d(xdata, ydata, ax=None, bins=30):
+    # Estimate the 2D histogram
+    H, xedges, yedges = np.histogram2d(xdata, ydata, bins=bins)
+    
+    # H needs to be rotated and flipped
+    H = np.rot90(H)
+    H = np.flipud(H)
+     
+    # Mask zeros
+    Hmasked = np.ma.masked_where(H==0, H) # Mask pixels with a value of zero
+     
+    # Plot 2D histogram using pcolor
+    if ax is None:
+        fig2 = plt.figure()
+        ax = plt.subplot(111)
+    ax.pcolormesh(xedges,yedges,Hmasked)
+
+def row_label(ax, label, **kwargs):
+    '''
+    For now, this function is the same as ylabel. Eventually it should be able to use renderers to automatically determine the correct offset..
+    '''
+    if 'offset' in kwargs:
+        kwargs['offset'] = -np.abs(kwargs['offset'])
+    ylabel(ax, label, **kwargs)
+
+def set_symmetric_ylim(ax, **kwargs):
+    m = np.max(np.abs(ax.get_ylim()))
+    set_axlim(ax, [-m, m], axis='y', **kwargs)
+
+def multi_axis_row_label(axes, label, offset=0, **kwargs):
+    # offset = -np.abs(offset)
+    y_max = np.max([ax.bbox._bbox.y1 for ax in axes.ravel()])
+    y_min = np.min([ax.bbox._bbox.y0 for ax in axes.ravel()])
+
+    fig_y_coord = (y_max + y_min)/2
+    print y_max, y_min, fig_y_coord
+    fig = axes.ravel()[0].figure
+    fig.text(offset, fig_y_coord, label, rotation=90, ha='right', va='center', fontproperties=ieee_fig_font, **kwargs)
+
+def multi_axis_col_label(axes, label, offset=0, **kwargs):
+    x_max = np.max([ax.bbox._bbox.x1 for ax in axes.ravel()])
+    x_min = np.min([ax.bbox._bbox.x0 for ax in axes.ravel()])
+
+    fig_x_coord = (x_max + x_min)/2
+    fig = axes.ravel()[0].figure
+    fig.text(fig_x_coord, offset, label, rotation=0, ha='center', va='bottom', fontproperties=ieee_fig_font, **kwargs)
+
+def _yticklabel_widths(ax, relative_to='figure'):
+    fig = ax.figure
+    ticks = ax.yaxis.get_major_ticks()
+    opt_spacing = []
+    for tick in ticks:
+        if not tick.get_visible():
+            continue
+        tick_extent = tick.label.get_window_extent()
+        pixel_width = tick_extent.x1 - tick_extent.x0
+        inch_width = pixel_width/fig.dpi
+        fig_width = ax.figure.bbox._bbox.x1 - ax.figure.bbox._bbox.x0
+
+        if relative_to == 'figure':
+            opt_spacing.append((inch_width + 8.*inches_per_point)/fig_width)
+        elif relative_to == 'axis':
+            opt_spacing.append((inch_width + 8.*inches_per_point)/_get_ax_width_inches(ax))
+        elif relative_to == 'inches':
+            opt_spacing.append(inch_width + 8.*inches_per_point)
+    return opt_spacing
+
+def _xticklabel_heights(ax, relative_to='figure'):
+    fig = ax.figure
+    ticks = ax.xaxis.get_major_ticks()
+    opt_spacing = []
+    for tick in ticks:
+        if not tick.get_visible():
+            continue        
+        tick_extent = tick.label.get_window_extent()
+        pixel_height = tick_extent.y1 - tick_extent.y0
+        inch_height = pixel_height/fig.dpi
+        fig_height = ax.figure.bbox._bbox.y1 - ax.figure.bbox._bbox.y0
+        if relative_to == 'figure':
+            opt_spacing.append((inch_height + 8*inches_per_point)/fig_height)
+        elif relative_to == 'axis':
+            opt_spacing.append((inch_height + 8*inches_per_point)/_get_ax_height_inches(ax))
+    return opt_spacing 
+
 def ylabel_widths(axes):
+    fig = axes[0,0].figure
     n_cols = axes.shape[1]
     n_rows = axes.shape[0]
     max_tick_widths = np.zeros([n_rows, n_cols])
@@ -893,3 +1268,7 @@ def histogram_line(ax, data, bins, normed=True, **plot_kwargs):
     bins = bins[:-1]# + bins[1]/2
     ax.plot(bins, hist_data, **plot_kwargs)
     return hist_data
+
+def calc_row_label_offset(axes):
+    return np.max(map(lambda ax: _yticklabel_widths(ax, relative_to='axis'), axes[:,0]))
+
